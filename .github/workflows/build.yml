@@ -2,9 +2,7 @@ name: Build ESP32-C3 SuperMini Firmware
 
 on:
   push:
-    branches: [ master, main ]
-  pull_request:
-    branches: [ master, main ]
+    branches: [ master ]
   workflow_dispatch:
 
 jobs:
@@ -28,55 +26,42 @@ jobs:
         fetch-depth: 1
       timeout-minutes: 30
 
-    - name: Setup board config (manual)
+    - name: Copy board files
       run: |
         mkdir -p xiaozhi-esp32/main/boards/esp32c3-supermini
         cp board-config/config.h xiaozhi-esp32/main/boards/esp32c3-supermini/
         cp board-config/esp32c3_supermini_board.cc xiaozhi-esp32/main/boards/esp32c3-supermini/
 
-    - name: Set target & configure sdkconfig
-      shell: bash
+    - name: Write sdkconfig appends
       run: |
-        source $IDF_PATH/export.sh
         cd xiaozhi-esp32
-        echo "Setting target to esp32c3..."
-        idf.py set-target esp32c3
-        echo ""
-        echo "Appending SDK config..."
-        cat >> sdkconfig << 'SDKCONFIG_EOF'
-CONFIG_IDF_TARGET="esp32c3"
-CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
-CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions/v2/4m.csv"
-CONFIG_PM_ENABLE=y
-CONFIG_FREERTOS_USE_TICKLESS_IDLE=y
-CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y
-CONFIG_ESP_MAIN_TASK_STACK_SIZE=7168
-CONFIG_FREERTOS_HZ=1000
-CONFIG_FREERTOS_IDLE_TASK_STACKSIZE=768
-CONFIG_ESP_WIFI_STATIC_RX_BUFFER_NUM=3
-CONFIG_ESP_WIFI_DYNAMIC_RX_BUFFER_NUM=4
-CONFIG_ESP_WIFI_AMPDU_TX_ENABLED=n
-CONFIG_ESP_WIFI_RX_BA_WIN=4
-CONFIG_ESP_WIFI_ENABLE_WPA3_SAE=n
-CONFIG_ESP_WIFI_ESPNOW_MAX_ENCRYPT_NUM=0
-CONFIG_ESP_WIFI_ENTERPRISE_SUPPORT=n
-CONFIG_LWIP_MAX_SOCKETS=10
-CONFIG_LWIP_TCPIP_RECVMBOX_SIZE=16
-CONFIG_LWIP_IPV6=n
-CONFIG_LWIP_TCPIP_TASK_STACK_SIZE=2048
-CONFIG_MBEDTLS_DYNAMIC_FREE_CONFIG_DATA=y
-CONFIG_NEWLIB_NANO_FORMAT=y
-CONFIG_COMPILER_OPTIMIZATION_SIZE=y
-CONFIG_USE_ESP_WAKE_WORD=y
-CONFIG_SR_WN_WN9S_NIHAOXIAOZHI=y
-SDKCONFIG_EOF
-        echo "Config done."
+        echo "" >> sdkconfig
+        echo "# SuperMini config by WorkBuddy" >> sdkconfig
+        echo "CONFIG_IDF_TARGET=\"esp32c3\"" >> sdkconfig
+        echo "CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y" >> sdkconfig
+        echo "CONFIG_PARTITION_TABLE_CUSTOM_FILENAME=\"partitions/v2/4m.csv\"" >> sdkconfig
+        echo "CONFIG_PM_ENABLE=y" >> sdkconfig
+        echo "CONFIG_FREERTOS_USE_TICKLESS_IDLE=y" >> sdkconfig
+        echo "CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y" >> sdkconfig
+        echo "CONFIG_ESP_MAIN_TASK_STACK_SIZE=7168" >> sdkconfig
+        echo "CONFIG_FREERTOS_HZ=1000" >> sdkconfig
+        echo "CONFIG_FREERTOS_IDLE_TASK_STACKSIZE=768" >> sdkconfig
+        echo "CONFIG_ESP_WIFI_STATIC_RX_BUFFER_NUM=3" >> sdkconfig
+        echo "CONFIG_ESP_WIFI_DYNAMIC_RX_BUFFER_NUM=4" >> sdkconfig
+        echo "CONFIG_LWIP_MAX_SOCKETS=10" >> sdkconfig
+        echo "CONFIG_LWIP_TCPIP_RECVMBOX_SIZE=16" >> sdkconfig
+        echo "CONFIG_LWIP_IPV6=n" >> sdkconfig
+        echo "CONFIG_NEWLIB_NANO_FORMAT=y" >> sdkconfig
+        echo "CONFIG_COMPILER_OPTIMIZATION_SIZE=y" >> sdkconfig
+        echo "CONFIG_USE_ESP_WAKE_WORD=y" >> sdkconfig
+        echo "CONFIG_SR_WN_WN9S_NIHAOXIAOZHI=y" >> sdkconfig
 
-    - name: Build firmware (direct idf.py)
+    - name: Set target and build
       shell: bash
       run: |
         source $IDF_PATH/export.sh
         cd xiaozhi-esp32
+        idf.py set-target esp32c3
         idf.py -DBOARD_NAME=esp32c3-supermini -DBOARD_TYPE=esp32c3-supermini build
 
     - name: Merge binary
@@ -84,22 +69,18 @@ SDKCONFIG_EOF
       run: |
         source $IDF_PATH/export.sh
         cd xiaozhi-esp32
-        idf.py merge-bin || echo "merge-bin skipped"
+        idf.py merge-bin || echo "merge-bin not needed"
 
-    - name: List all output files
-      shell: bash
+    - name: List output files
       run: |
-        echo "=== All .bin files ==="
-        find xiaozhi-esp32/build -name "*.bin" 2>/dev/null | head -30
-        echo "=== All .elf files ==="
-        find xiaozhi-esp32/build -name "*.elf" 2>/dev/null | head -10
-        echo "=== build directory top level ==="
-        ls -la xiaozhi-esp32/build/ 2>/dev/null | head -15
+        echo "=== .bin files ==="
+        find xiaozhi-esp32/build -name "*.bin" | head -20
+        echo "=== build root ==="
+        ls -la xiaozhi-esp32/build/*.bin 2>/dev/null || true
 
-    - name: Upload firmware artifacts
+    - name: Upload firmware
       uses: actions/upload-artifact@v4
       with:
         name: esp32c3-supermini-firmware
-        path: |
-          xiaozhi-esp32/build/**/*.bin
-          xiaozhi-esp32/build/**/*.elf
+        path: xiaozhi-esp32/build/merged-binary.bin
+        if-no-files-found: warn
