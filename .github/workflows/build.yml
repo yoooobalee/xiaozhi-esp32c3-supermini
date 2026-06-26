@@ -10,6 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: espressif/idf:v5.4
+    timeout-minutes: 30
 
     steps:
     - name: Checkout board config
@@ -26,61 +27,22 @@ jobs:
         fetch-depth: 1
       timeout-minutes: 30
 
-    - name: Copy board files
+    - name: Copy board files + run setup_board.py
+      shell: bash
       run: |
         mkdir -p xiaozhi-esp32/main/boards/esp32c3-supermini
         cp board-config/config.h xiaozhi-esp32/main/boards/esp32c3-supermini/
         cp board-config/esp32c3_supermini_board.cc xiaozhi-esp32/main/boards/esp32c3-supermini/
-
-    - name: Write sdkconfig appends
-      run: |
+        echo "--- Running setup_board.py to register board in CMake/Kconfig ---"
         cd xiaozhi-esp32
-        echo "" >> sdkconfig
-        echo "# SuperMini config by WorkBuddy" >> sdkconfig
-        echo "CONFIG_IDF_TARGET=\"esp32c3\"" >> sdkconfig
-        echo "CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y" >> sdkconfig
-        echo "CONFIG_PARTITION_TABLE_CUSTOM_FILENAME=\"partitions/v2/4m.csv\"" >> sdkconfig
-        echo "CONFIG_PM_ENABLE=y" >> sdkconfig
-        echo "CONFIG_FREERTOS_USE_TICKLESS_IDLE=y" >> sdkconfig
-        echo "CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y" >> sdkconfig
-        echo "CONFIG_ESP_MAIN_TASK_STACK_SIZE=7168" >> sdkconfig
-        echo "CONFIG_FREERTOS_HZ=1000" >> sdkconfig
-        echo "CONFIG_FREERTOS_IDLE_TASK_STACKSIZE=768" >> sdkconfig
-        echo "CONFIG_ESP_WIFI_STATIC_RX_BUFFER_NUM=3" >> sdkconfig
-        echo "CONFIG_ESP_WIFI_DYNAMIC_RX_BUFFER_NUM=4" >> sdkconfig
-        echo "CONFIG_LWIP_MAX_SOCKETS=10" >> sdkconfig
-        echo "CONFIG_LWIP_TCPIP_RECVMBOX_SIZE=16" >> sdkconfig
-        echo "CONFIG_LWIP_IPV6=n" >> sdkconfig
-        echo "CONFIG_NEWLIB_NANO_FORMAT=y" >> sdkconfig
-        echo "CONFIG_COMPILER_OPTIMIZATION_SIZE=y" >> sdkconfig
-        echo "CONFIG_USE_ESP_WAKE_WORD=y" >> sdkconfig
-        echo "CONFIG_SR_WN_WN9S_NIHAOXIAOZHI=y" >> sdkconfig
+        python3 ../board-config/scripts/setup_board.py main
+        echo "--- Board registration done ---"
 
-    - name: Set target and build
+    - name: Build with release.py (show full output)
       shell: bash
       run: |
         source $IDF_PATH/export.sh
         cd xiaozhi-esp32
-        idf.py set-target esp32c3
-        idf.py -DBOARD_NAME=esp32c3-supermini -DBOARD_TYPE=esp32c3-supermini build
-
-    - name: Merge binary
-      shell: bash
-      run: |
-        source $IDF_PATH/export.sh
-        cd xiaozhi-esp32
-        idf.py merge-bin || echo "merge-bin not needed"
-
-    - name: List output files
-      run: |
-        echo "=== .bin files ==="
-        find xiaozhi-esp32/build -name "*.bin" | head -20
-        echo "=== build root ==="
-        ls -la xiaozhi-esp32/build/*.bin 2>/dev/null || true
-
-    - name: Upload firmware
-      uses: actions/upload-artifact@v4
-      with:
-        name: esp32c3-supermini-firmware
-        path: xiaozhi-esp32/build/merged-binary.bin
-        if-no-files-found: warn
+        echo "=== Starting release.py build ==="
+        python3 scripts/release.py esp32c3-supermini --name esp32c3-supermini
+        echo "=== Build completed ==="
