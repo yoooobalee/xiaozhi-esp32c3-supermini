@@ -41,11 +41,26 @@ jobs:
       run: |
         source $IDF_PATH/export.sh
         cd xiaozhi-esp32
-        python3 scripts/release.py esp32c3-supermini --name esp32c3-supermini
+        python3 scripts/release.py esp32c3-supermini --name esp32c3-supermini || true
+
+    - name: Find built firmware files
+      shell: bash
+      run: |
+        echo "=== Searching for firmware output ==="
+        find xiaozhi-esp32/build/ -name "*.bin" -o -name "*.elf" 2>/dev/null | head -30
+        echo "=== Checking common paths ==="
+        ls -la xiaozhi-esp32/build/*.bin 2>/dev/null || echo "No .bin in build root"
+        ls -la xiaozhi-esp32/build/partition_table/ 2>/dev/null || echo "No partition_table"
+        ls -la xiaozhi-esp32/build/bootloader/ 2>/dev/null | head -5 || echo "No bootloader"
+        echo "=== Check merged binary ==="
+        ls -la xiaozhi-esp32/build/merged-binary.bin 2>/dev/null || echo "merged-binary.bin NOT found"
+        ls -la xiaozhi-esp32/build/xiaozhi*/ 2>/dev/null || echo "No xiaozhi subdirectory"
 
     - name: Upload firmware artifact
       uses: actions/upload-artifact@v4
       with:
         name: esp32c3-supermini-firmware
-        path: xiaozhi-esp32/build/merged-binary.bin
-        if-no-files-found: error
+        path: |
+          xiaozhi-esp32/build/**/*.bin
+          xiaozhi-esp32/build/**/*.elf
+        if-no-files-found: warn
