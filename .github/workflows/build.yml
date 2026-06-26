@@ -33,12 +33,12 @@ jobs:
         mkdir -p xiaozhi-esp32/main/boards/esp32c3-supermini
         cp board-config/config.h xiaozhi-esp32/main/boards/esp32c3-supermini/
         cp board-config/esp32c3_supermini_board.cc xiaozhi-esp32/main/boards/esp32c3-supermini/
-        echo "--- Running setup_board.py to register board in CMake/Kconfig ---"
+        echo "--- Running setup_board.py ---"
         cd xiaozhi-esp32
         python3 ../board-config/scripts/setup_board.py main
         echo "--- Board registration done ---"
 
-    - name: Build with release.py (show full output)
+    - name: Build with release.py
       shell: bash
       run: |
         source $IDF_PATH/export.sh
@@ -46,3 +46,12 @@ jobs:
         echo "=== Starting release.py build ==="
         python3 scripts/release.py esp32c3-supermini --name esp32c3-supermini
         echo "=== Build completed ==="
+        echo "=== Checking releases directory ==="
+        ls -la releases/ 2>/dev/null || echo "No releases directory"
+
+    - name: Upload firmware artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: esp32c3-supermini-firmware
+        path: xiaozhi-esp32/releases/
+        if-no-files-found: warn
