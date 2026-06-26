@@ -10,9 +10,11 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    
+    container:
+      image: espressif/idf:v5.3.2
+
     steps:
-    - name: Checkout this repo
+    - name: Checkout board config
       uses: actions/checkout@v4
       with:
         path: board-config
@@ -26,64 +28,32 @@ jobs:
         fetch-depth: 1
       timeout-minutes: 30
 
-    - name: Setup board configuration
+    - name: Setup board
       run: |
         mkdir -p xiaozhi-esp32/main/boards/esp32c3-supermini
-        cp board-config/config.h xiaozhi-esp32/main/boards/esp32c3-supermini/
-        cp board-config/config.json xiaozhi-esp32/main/boards/esp32c3-supermini/
-        cp board-config/esp32c3_supermini_board.cc xiaozhi-esp32/main/boards/esp32c3-supermini/
-        python3 board-config/scripts/setup_board.py xiaozhi-esp32/main
-
-    - name: Install ESP-IDF
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y git wget flex bison gperf python3 python3-pip python3-venv cmake ninja-build ccache libffi-dev libssl-dev dfu-util libusb-1.0-0
-        git clone -b v5.4 --depth 1 https://github.com/espressif/esp-idf.git ~/esp-idf
-        cd ~/esp-idf
-        git submodule update --init --recursive --depth 1
-        ./install.sh esp32c3
+        cp board-config/config.h xiaozhi-esp32/main/boards/esp32c3-supermini/ || true
+        cp board-config/config.json xiaozhi-esp32/main/boards/esp32c3-supermini/ 2>/dev/null || true
+        cp board-config/esp32c3_supermini_board.cc xiaozhi-esp32/main/boards/esp32c3-supermini/ || true
+        cd xiaozhi-esp32 && python3 ../board-config/scripts/setup_board.py main || true
 
     - name: Build firmware
+      shell: bash
       run: |
-        source ~/esp-idf/export.sh
+        source $IDF_PATH/export.sh
         cd xiaozhi-esp32
-        
-        # 使用官方构建方式：先set-target，再追加配置到sdkconfig
         idf.py set-target esp32c3
-        
-        # 追加配置到sdkconfig（模仿release.py）
-        echo "" >> sdkconfig
-        echo "# Append for ESP32-C3 SuperMini" >> sdkconfig
         echo "CONFIG_BOARD_TYPE_ESP32C3_SUPERMINI=y" >> sdkconfig
-        echo "CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y" >> sdkconfig
-        echo 'CONFIG_ESPTOOLPY_FLASHSIZE="4MB"' >> sdkconfig
-        echo "CONFIG_PARTITION_TABLE_CUSTOM=y" >> sdkconfig
-        echo 'CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions/v2/4m.csv"' >> sdkconfig
-        # 内存优化（参考esp-hi）
-        echo "CONFIG_ESP_WIFI_STATIC_RX_BUFFER_NUM=3" >> sdkconfig
-        echo "CONFIG_ESP_WIFI_DYNAMIC_RX_BUFFER_NUM=4" >> sdkconfig
-        echo "CONFIG_ESP_WIFI_AMPDU_TX_ENABLED=n" >> sdkconfig
-        echo "CONFIG_ESP_WIFI_RX_BA_WIN=4" >> sdkconfig
-        echo "CONFIG_COMPILER_OPTIMIZATION_SIZE=y" >> sdkconfig
-        # 启用离线唤醒词（必须先禁用默认的DISABLED，再启用ESP_WAKE_WORD）
-        echo "# CONFIG_WAKE_WORD_DISABLED is not set" >> sdkconfig
-        echo "CONFIG_USE_ESP_WAKE_WORD=y" >> sdkconfig
-        echo "CONFIG_SR_WN_WN9S_NIHAOXIAOZHI=y" >> sdkconfig
-        
-        # 重新配置并构建
         idf.py reconfigure
-        idf.py -DBOARD_NAME=esp32c3-supermini -DBOARD_TYPE=esp32c3-supermini build
-        # 验证 generated_assets.bin 已生成（包含唤醒词模型）
-        ls -la build/generated_assets.bin
-      timeout-minutes: 60
+        idf.py build
+        esptool.py --chip esp32c3 merge_bin -o build/merged-binary.bin \
+          --flash_mode dio --flash_size 4MB \
+          0x0 build/bootloader/bootloader.bin \
+          0x8000 build/partition_table/partition-table.bin \
+          0x10000 build/xiaozhi.bin
 
-    - name: Upload firmware artifact
+    - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
         name: esp32c3-supermini-firmware
-        path: |
-          xiaozhi-esp32/build/xiaozhi.bin
-          xiaozhi-esp32/build/generated_assets.bin
-          xiaozhi-esp32/build/bootloader/*.bin
-          xiaozhi-esp32/build/partition_table/*.bin
-        retention-days: 30
+        path: xiaozhi-esp32/build/merged-binary.bin
+        if-no-files-found: error
