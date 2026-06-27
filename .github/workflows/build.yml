@@ -46,11 +46,11 @@ jobs:
         set -e
         source $IDF_PATH/export.sh
         cd xiaozhi-esp32
-        echo "=== Starting build ==="
+        echo "=== Starting release.py build ==="
         python3 scripts/release.py esp32c3-supermini --name esp32c3-supermini
         echo "=== Build complete ==="
         echo "=== Checking releases directory ==="
-        ls -lh releases/ || echo "No releases directory found"
+        ls -lh releases/ || echo "WARNING: releases directory not found"
 
     - name: Upload firmware artifact
       uses: actions/upload-artifact@v4
