@@ -9,7 +9,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     container:
-      image: espressif/idf:v5.4
+      image: espressif/idf:v5.5.2
     timeout-minutes: 30
 
     steps:
@@ -31,14 +31,11 @@ jobs:
       shell: bash
       run: |
         set -e
-        echo "=== Step 1: Copy board files ==="
         mkdir -p xiaozhi-esp32/main/boards/esp32c3-supermini
         cp board-config/config.h xiaozhi-esp32/main/boards/esp32c3-supermini/
         cp board-config/esp32c3_supermini_board.cc xiaozhi-esp32/main/boards/esp32c3-supermini/
-        echo "=== Step 2: Run setup_board.py ==="
         cd xiaozhi-esp32
         python3 ../board-config/scripts/setup_board.py main
-        echo "=== Board registration complete ==="
 
     - name: Build firmware with release.py
       shell: bash
@@ -46,15 +43,12 @@ jobs:
         set -e
         source $IDF_PATH/export.sh
         cd xiaozhi-esp32
-        echo "=== Starting release.py build ==="
         python3 scripts/release.py esp32c3-supermini --name esp32c3-supermini
-        echo "=== Build complete ==="
-        echo "=== Checking releases directory ==="
-        ls -lh releases/ || echo "WARNING: releases directory not found"
+        ls -lh build/merged-binary.bin
 
     - name: Upload firmware artifact
       uses: actions/upload-artifact@v4
       with:
         name: esp32c3-supermini-firmware
-        path: xiaozhi-esp32/releases/
+        path: xiaozhi-esp32/build/merged-binary.bin
         if-no-files-found: error
